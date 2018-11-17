@@ -110,6 +110,9 @@ module LabelEnc
         Noteworthy difference:
         - This is different to `OneVsRest` encoding, because there is only one neg label (i.e., "not_poslabel" would not be an appropriate decription)
 
+        julia> targets_3c = [:a, :b, :c]
+        julia> targets_2c = [:a, :b, :a]
+        
         julia> ovr_lenc = LabelEnc.OneVsRest(:a)
         julia> islabelenc(targets_3c, ovr_lenc) #true
         julia> islabelenc(targets_2c, ovr_lenc) #true
