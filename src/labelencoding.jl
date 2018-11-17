@@ -101,6 +101,32 @@ module LabelEnc
     OneVsRest(poslabel::T) where {T<:Number} = OneVsRest{T}(poslabel, ifelse(poslabel == 0, poslabel+T(1), T(0)))
 
     """
+        NativeBinary{T} <: BinaryLabelEncoding{T, 1}
+
+        A vector-based binary label encoding with arbitrary labeltype with explicit poslabel and neglabel.
+
+        Strictly requires the targets to be either poslabel or neglabel.
+
+        Noteworthy difference:
+        - This is different to `OneVsRest` encoding, because there is only one neg label (i.e., "not_poslabel" would not be an appropriate decription)
+
+        julia> ovr_lenc = LabelEnc.OneVsRest(:a)
+        julia> islabelenc(targets_3c, ovr_lenc) #true
+        julia> islabelenc(targets_2c, ovr_lenc) #true
+
+        julia> nb_lenc = LabelEnc.NativeBinary(:a, :b)
+        julia> islabelenc(targets_3c, nb_lenc) # false
+        julia> islabelenc(targets_2c, nb_lenc) # true
+
+        - This is different to `NativeLabels`, because NativeLabels currently makes the positive label implicit and provides a fallback.
+
+    """
+    struct NativeBinary{T} <: BinaryLabelEncoding{T, 1}
+        poslabel::T
+        neglabel::T
+    end
+
+    """
         LabelEnc.Indices{T,K<:Number} <: LabelEncoding{T,K,1}
 
     A vector-based multi-label encoding with a numeric labeltype.
@@ -149,7 +175,7 @@ module LabelEnc
 
     Represents arbitrary class labels by storing the possible values
     as a member variable.
-    
+
     Constructor `LabelEnc.NativeLabels([fallbacklabel], classlabels)`
      - `classlabels` is a collection of labels that are allowed by the
        encoding. Each one representing a class.
@@ -157,11 +183,11 @@ module LabelEnc
          - It is either:
             - a value from `classlabels` which is used to encode any observed
               label that does not occur in `classlabels`
-            - or; a function which takes as its input a label which does not 
+            - or; a function which takes as its input a label which does not
               occur in `classlabels` and returns one that does.
-         - This can be used for example to handle out of vocabulary words in NLP 
+         - This can be used for example to handle out of vocabulary words in NLP
            as in `LabelEnc.NativeLabels("<OOV>", [red", "green", blue", ..., "<OOV>"])`
-         - Or to standardize inputs: as in 
+         - Or to standardize inputs: as in
            ```
             LabelEnc.NativeLabels([..., v"0.5.2", v"0.6.0", v"0.6.1", ....]) do oov
                 # Discard build and prerelease fields, `v"0.7.0-beta.18"`->`v"0.7.0"`
@@ -173,8 +199,8 @@ module LabelEnc
     In a binary setting the first element of the stored class labels
     represents the positive label and the second element the negative
     label.
-    In a multiclass setting, the labels will `convertenc` to 
-    `LabelEnc.Indices`  using their position in the `label` argument 
+    In a multiclass setting, the labels will `convertenc` to
+    `LabelEnc.Indices`  using their position in the `label` argument
     to the constructor.
     """
     struct NativeLabels{T,K,F} <: LabelEncoding{T,K,1}
@@ -196,11 +222,11 @@ module LabelEnc
     NativeLabels{T,K}(getfallbacklabel::F, label::AbstractVector{T}) where {F,T,K} = NativeLabels{T,K}(getfallbacklabel, collect(label))
     NativeLabels{T,K}(fallbacklabel::T, label::AbstractVector{T}) where {T,K} = NativeLabels{T,K}(oov->fallbacklabel, label)
     NativeLabels{T,K}(label::AbstractVector{T}) where {T,K} = NativeLabels{T,K}(default_getfallbacklabel, label)
-    
+
     NativeLabels(getfallbacklabel::Function, label::AbstractVector{T}, ::Type{Val{K}})  where {T,K} = NativeLabels{T,K}(getfallbacklabel, label)
     NativeLabels(fallbacklabel, label::AbstractVector{T}, ::Type{Val{K}})  where {T,K} = NativeLabels(oov->fallbacklabel, label, Val{K})
     NativeLabels(label::AbstractVector, ::Type{Val{K}})  where {K} = NativeLabels(default_getfallbacklabel, label, Val{K})
-    
+
     NativeLabels(getfallbacklabel, label) = NativeLabels(getfallbacklabel, label, Val{length(label)})
     NativeLabels(label) = NativeLabels(default_getfallbacklabel, label)
 
@@ -225,6 +251,7 @@ end
 
 # Query the label
 ind2label(i::Integer, lm::BinaryLabelEncoding) = ifelse(i == 1, ind2label(Val{1},lm), ind2label(Val{2},lm))
+ind2label(i::Integer, lm::LabelEnc.NativeBinary) where T = ind2label(Val{i}, lm)
 ind2label(i::Integer, ::LabelEnc.Indices{T}) where {T} = T(i)
 ind2label(i::Integer, ::LabelEnc.OneOfK{T,K}) where {T,K} = (x = zeros(T,K); x[i] = T(1); x)
 ind2label(i::Integer, lm::LabelEnc.NativeLabels) = lm.label[Int(i)]
@@ -240,6 +267,8 @@ ind2label(::Type{Val{2}}, ovr::LabelEnc.OneVsRest) = ovr.neglabel
 ind2label(::Type{Val{K}}, ::LabelEnc.Indices{T}) where {T,K} = T(K)
 ind2label(::Type{Val{I}}, ::LabelEnc.OneOfK{T,K}) where {T,I,K} = (x = zeros(T,K); x[I] = T(1); x)
 ind2label(::Type{Val{K}}, lm::LabelEnc.NativeLabels) where {K} = lm.label[K]
+ind2label(::Type{Val{1}}, lm::LabelEnc.NativeBinary) = lm.poslabel
+ind2label(::Type{Val{2}}, lm::LabelEnc.NativeBinary) = lm.neglabel
 
 poslabel(lm::LabelEnc.BinaryLabelEncoding) = ind2label(Val{1}, lm)
 neglabel(lm::LabelEnc.BinaryLabelEncoding) = ind2label(Val{2}, lm)
@@ -269,6 +298,7 @@ isposlabel(value::Number, lm::LabelEnc.Indices{T,2}) where {T} = value == poslab
 isposlabel(value::Number, lm::LabelEnc.OneOfK{T,2})  where {T} = value == T(1)
 isposlabel(value::AbstractVector{<:Number}, lm::LabelEnc.OneOfK{T,2}) where {T} = argmax(value) == 1
 isposlabel(value, lm::LabelEnc.NativeLabels{T,2}) where {T} = standardize_label(value, lm) == poslabel(lm)
+isposlabel(value, lm::LabelEnc.NativeBinary{T}) where {T} = value == lm.poslabel
 
 # What it means to be a negative label
 isneglabel(value, ::LabelEnc.FuzzyBinary) = _ambiguous()
@@ -285,6 +315,7 @@ isneglabel(value::Number, lm::LabelEnc.Indices{T,2}) where {T} = value == neglab
 isneglabel(value::Number, lm::LabelEnc.OneOfK{T,2})  where {T} = value == T(2)
 isneglabel(value::AbstractVector{<:Number}, lm::LabelEnc.OneOfK{T,2}) where {T} = argmax(value) == 2
 isneglabel(value, lm::LabelEnc.NativeLabels{T,2}) where {T} = standardize_label(value, lm) == neglabel(lm)
+isneglabel(value, lm::LabelEnc.NativeBinary{T}) where {T} = value == lm.neglabel
 
 # Check if the encoding is appropriate
 islabelenc(targets::AbstractArray, args...) = false
@@ -302,6 +333,10 @@ islabelenc(targets::AbstractVector{T}, lm::LabelEnc.OneVsRest{T})   where {T}   
 islabelenc(targets::AbstractVector{T}, ::LabelEnc.Indices{T,K})     where {T<:Number,K} = all(0 < x <= T(K) && isinteger(x) for x in targets)
 islabelenc(targets::AbstractVector{T}, ::Type{LabelEnc.Indices{T}}) where {T<:Number}   = all(0 < x && isinteger(x) for x in targets)
 islabelenc(targets::AbstractVector{T}, ::Type{LabelEnc.Indices})    where {T<:Number}   = all(0 < x && isinteger(x) for x in targets)
+
+function islabelenc(targets::AbstractVector{T}, lenc::LabelEnc.NativeBinary{T}) where T
+    all(isposlabel.(targets, lenc) .| isneglabel.(targets, lenc))
+end
 
 function islabelenc(targets::AbstractVector, lm::LabelEnc.NativeLabels; strict=true)
     if strict
@@ -387,7 +422,13 @@ labelenc(targets::AbstractVector{Bool}) = LabelEnc.TrueFalse()
 
 function labelenc(targets::AbstractVector)
     lbls = label(targets)
-    LabelEnc.NativeLabels(lbls)
+    if length(lbls) == 2
+        # so this still automatically infers the positive label
+        LabelEnc.NativeBinary(lbls...)
+    else
+
+        LabelEnc.NativeLabels(lbls)
+    end
 end
 
 function labelenc(targets::AbstractVector{T}) where {T<:Number}

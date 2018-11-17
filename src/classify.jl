@@ -12,6 +12,14 @@ function classify(value::Number, lm::LabelEnc.ZeroOne{R}) where {R}
     R(classify(value, lm.cutoff))
 end
 
+## BinaryNative
+
+classify(value::Number, cutoff::Number, lm::LabelEnc.NativeBinary) = classify(value, x -> x >= cutoff, lm)
+
+function classify(value::Number, is_positive_class::Function, lm::LabelEnc.NativeBinary)
+    is_positive_class(value) ? lm.poslabel : lm.neglabel
+end
+
 ## Margin
 
 _sign(value::T) where {T} = ifelse(signbit(value), T(-1), T(1))::T
