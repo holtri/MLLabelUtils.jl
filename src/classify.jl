@@ -1,3 +1,21 @@
+## NativeLabel classify for binary case
+
+function classify(value::Number, is_pos_class::Function, lm::LabelEnc.NativeLabels{T, 2, F}) where {T, F}
+    is_pos_class(value) ? poslabel(lm) : neglabel(lm)
+end
+
+classify(value::Number, cutoff::Number, lm::LabelEnc.NativeLabels{T, 2, F}) where {T, F} = classify(value, x -> x >= cutoff, lm)
+
+function classify!(buffer::AbstractVector, values::AbstractVector, cutoff::Number, lm::LabelEnc.NativeLabels{T, 2, F}) where {T, F}
+    buffer .= classify.(values, cutoff, lm)
+    buffer
+end
+
+function classify!(buffer::AbstractVector, values::AbstractVector, is_pos_class::Function, lm::LabelEnc.NativeLabels{T, 2, F}) where {T, F}
+    buffer .= classify.(values, is_pos_class, lm)
+    buffer
+end
+
 ## ZeroOne
 
 function classify(value::T, cutoff::Number) where {T<:Number}

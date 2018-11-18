@@ -135,4 +135,34 @@ end
         @test @inferred(classify!(buffer, At, LabelEnc.OneOfK, obsdim=1)) == [1,3,2,1,2,3,2]
         @test buffer == [1,3,2,1,2,3,2]
     end
+
+    @testset "NativeLabel" begin
+        @testset "binary" begin
+            lm1 = LabelEnc.NativeLabels([:yes, :no])
+            lm2 = LabelEnc.NativeLabels([0, 42])
+            for T in (Float16, Float32, Float64)
+                scores = T[0.3, 0.7, -0.3]
+                @test @inferred(classify(scores[1], 0.5, lm)) === neglabel(lm)
+                @test @inferred(classify(scores[1], 0.1, lm)) === poslabel(lm)
+                @test classify.(scores, 0.3, lm) == [:yes, :yes, :no]
+                @test classify.(scores, 0.3, lm2) == [0, 0, 42]
+                @test classify.(scores, x -> x >= -0.5 && x <= 0.5, lm) == [:yes, :no, :yes]
+                buffer = Array{labeltype(lm)}(undef, length(scores))
+                classify!(buffer, scores, 0.3, lm)
+                @test buffer == [:yes, :yes, :no]
+            end
+
+            for T in (Float16, Float32, Float64)
+                scores = T[2, 5, -1]
+                @test @inferred(classify(scores[1], 3, lm)) === neglabel(lm)
+                @test @inferred(classify(scores[1], 0, lm)) === poslabel(lm)
+                @test classify.(scores, 2, lm) == [:yes, :yes, :no]
+                @test classify.(scores, 0.1, lm2) == [0, 0, 42]
+                @test classify.(scores, x -> x >= -4 && x <= 4, lm) == [:yes, :no, :yes]
+                buffer = Array{labeltype(lm)}(undef, length(scores))
+                classify!(buffer, scores, 0, lm)
+                @test buffer == [:yes, :yes, :no]
+            end
+        end
+    end
 end
